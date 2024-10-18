@@ -1,0 +1,90 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+
+void list_files(const char *path, int show_all, int long_format, int reverse) {
+    struct dirent **namelist;
+    int n;
+
+    n = scandir(path, &namelist, NULL, alphasort);
+    if (n < 0) {
+        perror("scandir");
+        return;
+    }
+
+    if (reverse) {
+        for (int i = 0; i < n / 2; i++) {
+            struct dirent *temp = namelist[i];
+            namelist[i] = namelist[n - i - 1];
+            namelist[n - i - 1] = temp;
+        }
+    }
+
+    for (int i = 0; i < n; i++) {
+        if (!show_all && namelist[i]->d_name[0] == '.') {
+            continue;
+        }
+
+        if (long_format) {
+            struct stat file_stat;
+            char fullpath[512];
+            snprintf(fullpath, sizeof(fullpath), "%s/%s", path, namelist[i]->d_name);
+            stat(fullpath, &file_stat);
+
+            printf((S_ISDIR(file_stat.st_mode)) ? "d" : "-");
+            printf((file_stat.st_mode & S_IRUSR) ? "r" : "-");
+            printf((file_stat.st_mode & S_IWUSR) ? "w" : "-");
+            printf((file_stat.st_mode & S_IXUSR) ? "x" : "-");
+            printf((file_stat.st_mode & S_IRGRP) ? "r" : "-");
+            printf((file_stat.st_mode & S_IWGRP) ? "w" : "-");
+            printf((file_stat.st_mode & S_IXGRP) ? "x" : "-");
+            printf((file_stat.st_mode & S_IROTH) ? "r" : "-");
+            printf((file_stat.st_mode & S_IWOTH) ? "w" : "-");
+            printf((file_stat.st_mode & S_IXOTH) ? "x" : "-");
+            printf(" %ld ", file_stat.st_nlink);
+            printf("%ld ", file_stat.st_size);
+            printf("%.12s ", 4 + ctime(&file_stat.st_mtime));
+        }
+
+        printf("%s\n", namelist[i]->d_name);
+        free(namelist[i]);
+    }
+    free(namelist);
+}
+
+int main(int argc, char *argv[]) {
+    int show_all = 0;
+    int long_format = 0;
+    int reverse = 0;
+    const char *path = ".";
+
+    int opt;
+    while ((opt = getopt(argc, argv, "alr")) != -1) {
+        switch (opt) {
+            case 'a':
+                show_all = 1;
+                break;
+            case 'l':
+                long_format = 1;
+                break;
+            case 'r':
+                reverse = 1;
+                break;
+            default:
+                fprintf(stderr, "Usage: %s [-a] [-l] [-r] [path]\n", argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if (optind < argc) {
+        path = argv[optind];
+    }
+
+    list_files(path, show_all, long_format, reverse);
+    
+    return 0;
+}
